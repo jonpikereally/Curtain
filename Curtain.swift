@@ -472,14 +472,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         // New items land visible by default; catch them and put them where the settings say.
         watcher = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.watch() }
+        Updater.shared.onChange = { [weak self] in self?.render() }
+        Updater.shared.startAutomaticChecks()
     }
 
     // MARK: state
 
     private func render() {
         divider.length = expanded ? 12 : 10_000
-        let symbol = expanded ? "chevron.right" : "chevron.left"
-        toggle.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: expanded ? "hide" : "show")
+        // A filled circle around the arrow means an update is waiting (right-click to install it).
+        let update = Updater.shared.available != nil
+        let symbol = expanded ? "chevron.right" : (update ? "chevron.left.circle.fill" : "chevron.left")
+        toggle.button?.image = NSImage(systemSymbolName: symbol,
+                                       accessibilityDescription: expanded ? "hide" : (update ? "show, update available" : "show"))
         divider.button?.image = expanded ? NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: "divider") : nil
     }
 
@@ -809,10 +814,119 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         settings.target = self
         menu.addItem(settings)
         menu.addItem(.separator())
+        let updateTitle = Updater.shared.available.map { "\u{2B06}\u{FE0E} Install Update to v\($0.version)\u{2026}" }
+            ?? "Check for Updates\u{2026}"
+        let update = NSMenuItem(title: checkingForUpdates ? "Checking for Updates\u{2026}" : updateTitle,
+                                action: #selector(checkForUpdates), keyEquivalent: "")
+        update.target = self
+        update.isEnabled = !checkingForUpdates
+        menu.addItem(update)
+        let source = NSMenuItem(title: "Update Source\u{2026}", action: #selector(editUpdateSource), keyEquivalent: "")
+        source.target = self
+        menu.addItem(source)
+        let github = NSMenuItem(title: "Curtain on GitHub", action: #selector(openGitHub), keyEquivalent: "")
+        github.target = self
+        menu.addItem(github)
+        let version = NSMenuItem(title: "Version \(AppVersion.version)", action: nil, keyEquivalent: "")
+        version.isEnabled = false
+        menu.addItem(version)
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Curtain", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         if let button = toggle.button {
             menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
         }
+    }
+
+    // MARK: updates
+
+    private var checkingForUpdates = false
+
+    @objc private func checkForUpdates() {
+        if let m = Updater.shared.available {
+            offerInstall(m)
+            return
+        }
+        checkingForUpdates = true
+        Updater.shared.check { [weak self] result in
+            guard let self else { return }
+            self.checkingForUpdates = false
+            self.render()
+            switch result {
+            case .success(let m?):
+                self.offerInstall(m)
+            case .success(nil):
+                let alert = NSAlert()
+                alert.messageText = "Curtain is up to date"
+                alert.informativeText = "You're running v\(AppVersion.version), the newest version available."
+                NSApp.activate(ignoringOtherApps: true)
+                alert.runModal()
+            case .failure(let error):
+                self.showUpdateError(error)
+            }
+        }
+    }
+
+    private func offerInstall(_ m: UpdateManifest) {
+        let alert = NSAlert()
+        alert.messageText = "Update to Curtain v\(m.version)?"
+        var info = "You have v\(AppVersion.version)."
+        if let notes = m.notes, !notes.isEmpty { info += "\n\nWhat's new:\n\(notes)" }
+        info += "\n\nCurtain will quit, update itself and reopen. Your settings are kept."
+            + "\n\nAfterwards turn Accessibility back on for Curtain (macOS asks after every update), and Screen "
+            + "Recording if you use it. Until you do, Curtain can't read the menu bar."
+        alert.informativeText = info
+        alert.addButton(withTitle: "Install and Relaunch")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        store.status = "Installing update\u{2026}"
+        Updater.shared.install(m) { [weak self] error in
+            self?.store.status = ""
+            self?.showUpdateError(error)
+        }
+    }
+
+    private func showUpdateError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "Couldn't update Curtain"
+        alert.informativeText = error.localizedDescription
+        if case UpdateError.noFeed = error {
+            alert.addButton(withTitle: "Set Update Source\u{2026}")
+            alert.addButton(withTitle: "Cancel")
+            NSApp.activate(ignoringOtherApps: true)
+            if alert.runModal() == .alertFirstButtonReturn { editUpdateSource() }
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
+
+    @objc private func editUpdateSource() {
+        let alert = NSAlert()
+        alert.messageText = "Update Source"
+        alert.informativeText = "Where Curtain looks for new versions: a web link or a file path to a latest.json feed. "
+            + "Leave it empty to use the built-in source:\n\(AppVersion.updateFeed)"
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 380, height: 24))
+        field.stringValue = UserDefaults.standard.string(forKey: "UpdateFeed") ?? ""
+        field.placeholderString = AppVersion.updateFeed
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty && Updater.url(from: value) == nil {
+            showUpdateError(UpdateError.badFeed(value))
+            return
+        }
+        Updater.shared.feed = value
+        Updater.shared.check { _ in }
+    }
+
+    @objc private func openGitHub() {
+        if let url = URL(string: AppVersion.repo) { NSWorkspace.shared.open(url) }
     }
 
     @objc private func menuToggleBar() {
@@ -1066,7 +1180,9 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Ticked items stay on the bar. Everything else lives behind the chevron.")
+            Text(store.handsOff
+                 ? "Ticked items are on the bar right now; the rest live behind the arrow. To move one, \u{2318}-drag its icon (see \u{201C}Never move the mouse\u{201D} below)."
+                 : "Ticked items stay on the bar. Everything else lives behind the arrow.")
                 .font(.callout).foregroundStyle(.secondary)
                 .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
 
@@ -1340,10 +1456,15 @@ extension AppDelegate {
     }
 }
 
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
-app.setActivationPolicy(.accessory)
-let control = ControlServer(app: delegate)
-control.start()
-app.run()
+@main
+enum CurtainMain {
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        let control = ControlServer(app: delegate)
+        control.start()
+        withExtendedLifetime((delegate, control)) { app.run() }
+    }
+}
