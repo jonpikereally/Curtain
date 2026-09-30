@@ -20,6 +20,20 @@ Originally written by Chris (with Claude) for macOS 26; this fork runs on macOS 
 
 Requires the Command Line Tools. Run `install.sh` from Terminal.
 
+### Updates
+
+Curtain checks `updates/latest.json` in this repo shortly after launch and every 6 hours. When a newer version exists, the arrow gets a filled circle and the right-click menu shows **Install Update to vX…**. Installing downloads `updates/Curtain.zip`, quits Curtain, swaps the app in place and reopens it. **Update Source…** in the menu can point it at a different feed, such as a local file for testing.
+
+To ship a release:
+
+```bash
+# 1. bump CFBundleVersion and CFBundleShortVersionString in Info.plist
+UPDATE_NOTES="What changed" ./release.sh   # universal build → updates/Curtain.zip + updates/latest.json
+# 2. commit and push, including updates/
+```
+
+`raw.githubusercontent.com` caches for about 5 minutes, so a fresh release can take a moment to show up. Update checks only work while the repo is public.
+
 ### Permissions
 
 - **Accessibility** (required): reads and moves menu bar items.
