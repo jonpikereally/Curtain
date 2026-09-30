@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.jonpike.curtaindeck",
+  "Name": "Curtain Deck",
+  "Version": "1.0.0.0",
+  "Author": "Jon Pike",
+  "Description": "Control the Curtain menu bar hider: show every hidden icon, open the popout, open a specific menu bar item's menu, choose which icons stay on the bar, and arrange the bar.",
+  "Category": "Curtain",
+  "CategoryIcon": "imgs/categoryIcon",
+  "Icon": "imgs/pluginIcon",
+  "CodePath": "bin/plugin.js",
+  "SDKVersion": 3,
+  "Nodejs": { "Version": "20" },
+  "Software": { "MinimumVersion": "6.9" },
+  "OS": [ { "Platform": "mac", "MinimumVersion": "13" } ],
+  "Actions": [
+    {
+      "Name": "Show All Icons",
+      "UUID": "com.jonpike.curtaindeck.expand",
+      "Icon": "imgs/expandOn",
+      "Tooltip": "Reveal every hidden icon on the menu bar. Lit while they're showing. Press when Curtain isn't running to launch it.",
+      "PropertyInspectorPath": "ui/expand.html",
+      "Controllers": [ "Keypad" ],
+      "States": [
+        { "Image": "imgs/expandOff", "TitleAlignment": "bottom" },
+        { "Image": "imgs/expandOn", "TitleAlignment": "bottom" }
+      ]
+    },
+    {
+      "Name": "Hidden Icons Popout",
+      "UUID": "com.jonpike.curtaindeck.popout",
+      "Icon": "imgs/popout",
+      "Tooltip": "Open or close the popout of hidden icons under the arrow. The key shows how many are hidden.",
+      "PropertyInspectorPath": "ui/popout.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "imgs/popout", "TitleAlignment": "bottom" } ]
+    },
+    {
+      "Name": "Open Menu Item",
+      "UUID": "com.jonpike.curtaindeck.open",
+      "Icon": "imgs/open",
+      "Tooltip": "Open one menu bar item's menu, hidden or not, e.g. Wi-Fi or Dropbox.",
+      "PropertyInspectorPath": "ui/item.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "imgs/open", "TitleAlignment": "bottom" } ]
+    },
+    {
+      "Name": "Keep on Bar",
+      "UUID": "com.jonpike.curtaindeck.visible",
+      "Icon": "imgs/visibleOn",
+      "Tooltip": "Choose whether one menu bar item stays on the bar or hides behind the arrow. Lit while it's on the bar.",
+      "PropertyInspectorPath": "ui/visible.html",
+      "Controllers": [ "Keypad" ],
+      "States": [
+        { "Image": "imgs/visibleOff", "TitleAlignment": "bottom" },
+        { "Image": "imgs/visibleOn", "TitleAlignment": "bottom" }
+      ]
+    },
+    {
+      "Name": "Arrange",
+      "UUID": "com.jonpike.curtaindeck.arrange",
+      "Icon": "imgs/arrange",
+      "Tooltip": "Put every icon back on the side Curtain's settings say, or re-read the menu bar.",
+      "PropertyInspectorPath": "ui/arrange.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "imgs/arrange", "TitleAlignment": "bottom" } ]
+    },
+    {
+      "Name": "Curtain Settings",
+      "UUID": "com.jonpike.curtaindeck.settings",
+      "Icon": "imgs/settings",
+      "Tooltip": "Open Curtain's Settings window.",
+      "PropertyInspectorPath": "ui/settings.html",
+      "Controllers": [ "Keypad" ],
+      "States": [ { "Image": "imgs/settings", "TitleAlignment": "bottom" } ]
+    }
+  ]
+}
