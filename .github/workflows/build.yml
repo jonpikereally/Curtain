@@ -1,0 +1,21 @@
+name: Build
+# Proves every branch and pull request builds. Pushes to main are built (and shipped) by release.yml.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Universal release build (arm64 + x86_64)
+        run: UPDATE_NOTES="CI build" ./release.sh
+      - name: Check the bundle
+        run: |
+          unzip -q -o updates/Curtain.zip -d "$RUNNER_TEMP/release"
+          lipo -info "$RUNNER_TEMP/release/Curtain/Curtain.app/Contents/MacOS/Curtain"
+          unzip -l updates/Curtain.zip
+          python3 -c 'import json; print(json.load(open("updates/latest.json")))'

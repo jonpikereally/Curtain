@@ -24,12 +24,13 @@ Requires the Command Line Tools. Run `install.sh` from Terminal.
 
 Curtain checks `updates/latest.json` in this repo shortly after launch and every 6 hours. When a newer version exists, the arrow gets a filled circle and the right-click menu shows **Install Update to vX…**. Installing downloads `updates/Curtain.zip`, quits Curtain, swaps the app in place and reopens it. **Update Source…** in the menu can point it at a different feed, such as a local file for testing.
 
-To ship a release:
+To ship a release, bump `CFBundleVersion` and `CFBundleShortVersionString` in `Info.plist`, write what changed in `RELEASE_NOTES.txt`, and merge to `main`. The **Release** workflow (`.github/workflows/release.yml`) builds every push to `main` on a GitHub Mac runner. When the version is newer than `updates/latest.json`, it commits the universal `updates/Curtain.zip` and `updates/latest.json` back to `main`, which ships it. Pushes that don't bump the version ship nothing.
+
+To ship from your own Mac instead:
 
 ```bash
-# 1. bump CFBundleVersion and CFBundleShortVersionString in Info.plist
-UPDATE_NOTES="What changed" ./release.sh   # universal build → updates/Curtain.zip + updates/latest.json
-# 2. commit and push, including updates/
+UPDATE_NOTES="What changed" ./release.sh   # or omit UPDATE_NOTES to use RELEASE_NOTES.txt
+# then commit and push, including updates/
 ```
 
 `raw.githubusercontent.com` caches for about 5 minutes, so a fresh release can take a moment to show up. Update checks only work while the repo is public.

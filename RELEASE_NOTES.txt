@@ -1,0 +1,1 @@
+Curtain now checks GitHub for updates: right-click the arrow for Check for Updates. The arrow gets a filled circle when an update is waiting. Settings explains the greyed-out switches when Never move the mouse is on.
