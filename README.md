@@ -7,7 +7,9 @@ Originally written by Chris (with Claude) for macOS 26; this fork runs on macOS 
 ## Using it
 
 - **Click the arrow** to open the popout of hidden icons, or to show them on the menu bar. You choose which in Settings, and **Option-click** does the other.
-- **Right-click the arrow** for Settings and Quit.
+- **Right-click the arrow** for Settings, Open at Login and Quit.
+- **Open at Login** is in the right-click menu and in Settings. If macOS wants you to allow it first, Settings shows a button that opens Login Items.
+- **Error codes** like `[CUR-LOGIN-01]` are listed in [ERRORS.md](ERRORS.md).
 - **Drag icons in the popout** to reorder it.
 - **Never move the mouse** (on by default): Curtain never drags icons or fakes clicks. You arrange the bar yourself by showing all icons and ⌘-dragging an icon left of the `≡` divider to hide it, or right of it to keep it. The Settings list follows what you do. Turn the setting off and Curtain drags icons into place itself when you flip a switch or press Arrange now, taking over the mouse for a moment each time.
 
