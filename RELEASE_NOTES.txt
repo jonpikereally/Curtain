@@ -1,1 +1,1 @@
-Open at Login is now in the right-click menu as well as Settings. The Settings switch updates straight away, and if macOS is waiting for you to allow Curtain under Login Items, Settings says so and has a button that takes you there.
+Settings now has an updates row: it shows your version and build date, when Curtain last checked, and a button to check for updates or install one. Update errors now carry a code you can look up in ERRORS.md.
