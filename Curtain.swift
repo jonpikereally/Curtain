@@ -391,6 +391,10 @@ final class Store: ObservableObject {
     @Published var status = ""
     @Published var accessibility = AXIsProcessTrusted()
     @Published var screenRecording = IconCache.canCapture
+    /// Read back from the system, not UserDefaults, since the user can also switch it off in System Settings.
+    @Published var openAtLogin = SMAppService.mainApp.status == .enabled
+    /// Registered, but macOS wants the user to allow it under Login Items before it runs.
+    @Published var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
 
     private init() {
         visibleApps = Set(d.stringArray(forKey: "VisibleApps") ?? [])
@@ -424,6 +428,23 @@ final class Store: ObservableObject {
     }
 
     func isVisible(_ item: BarItem) -> Bool { visibleApps.contains(item.key) }
+
+    func refreshLoginItem() {
+        let status = SMAppService.mainApp.status
+        openAtLogin = status == .enabled
+        loginNeedsApproval = status == .requiresApproval
+    }
+
+    func setOpenAtLogin(_ on: Bool) {
+        d.set(on, forKey: "LoginItem")
+        do {
+            on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister()
+            if status.hasPrefix("[CUR-LOGIN") { status = "" }
+        } catch {
+            status = "[CUR-LOGIN-01] Login item: \(error.localizedDescription)"
+        }
+        refreshLoginItem()
+    }
 }
 
 // MARK: - The app
@@ -813,6 +834,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let settings = NSMenuItem(title: "Settings\u{2026}", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
+        store.refreshLoginItem()
+        let login = NSMenuItem(title: "Open at Login", action: #selector(menuToggleLogin), keyEquivalent: "")
+        login.target = self
+        login.state = store.openAtLogin || store.loginNeedsApproval ? .on : .off
+        menu.addItem(login)
         menu.addItem(.separator())
         let updateTitle = Updater.shared.available.map { "\u{2B06}\u{FE0E} Install Update to v\($0.version)\u{2026}" }
             ?? "Check for Updates\u{2026}"
@@ -929,6 +955,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let url = URL(string: AppVersion.repo) { NSWorkspace.shared.open(url) }
     }
 
+    @objc private func menuToggleLogin() {
+        store.setOpenAtLogin(!(store.openAtLogin || store.loginNeedsApproval))
+        if store.loginNeedsApproval { SMAppService.openSystemSettingsLoginItems() }
+    }
+
     @objc private func menuToggleBar() {
         setExpanded(!expanded, rehideAfter: store.rehideSeconds)
     }
@@ -963,6 +994,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowDidBecomeKey(_ notification: Notification) {
         store.accessibility = AXIsProcessTrusted()
         store.screenRecording = IconCache.canCapture
+        store.refreshLoginItem()
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -1248,13 +1280,14 @@ struct SettingsView: View {
                     Text("\(Int(store.rehideSeconds))s").monospacedDigit().frame(width: 32, alignment: .trailing)
                 }
                 Toggle("Open Curtain at login", isOn: Binding(
-                    get: { SMAppService.mainApp.status == .enabled },
-                    set: { on in
-                        UserDefaults.standard.set(on, forKey: "LoginItem")
-                        do { on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }
-                        catch { store.status = "Login item: \(error.localizedDescription)" }
-                    }
+                    get: { store.openAtLogin || store.loginNeedsApproval },
+                    set: { store.setOpenAtLogin($0) }
                 ))
+                if store.loginNeedsApproval {
+                    permissionRow("Curtain won't open at login until you allow it under Login Items in System Settings.", "Open Settings") {
+                        SMAppService.openSystemSettingsLoginItems()
+                    }
+                }
                 if !store.screenRecording {
                     permissionRow("Screen Recording is off, so the popout shows app icons instead of the real glyphs. After allowing it, quit and reopen Curtain.", "Open Settings") {
                         // The system prompt only ever appears once, so after that the button would do
@@ -1269,6 +1302,7 @@ struct SettingsView: View {
                     Button("Reset popout order") { store.order = [] }.disabled(store.order.isEmpty)
                     Spacer()
                     Text(store.status).font(.caption).foregroundStyle(.secondary)
+                        .help(store.status.hasPrefix("[CUR-") ? "Look up this code in ERRORS.md in Curtain's GitHub repo." : "")
                 }
                 Text("Tip: drag icons in the popout to rearrange them. Hold \u{2318} and drag icons on the bar itself to reorder it.")
                     .font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
