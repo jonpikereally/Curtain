@@ -395,6 +395,10 @@ final class Store: ObservableObject {
     @Published var openAtLogin = SMAppService.mainApp.status == .enabled
     /// Registered, but macOS wants the user to allow it under Login Items before it runs.
     @Published var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
+    /// Mirrors Updater for the Settings window: the newer version waiting, and whether a check is running.
+    @Published var updateVersion: String?
+    @Published var checkingForUpdates = false
+    @Published var lastUpdateCheck: Date?
 
     private init() {
         visibleApps = Set(d.stringArray(forKey: "VisibleApps") ?? [])
@@ -493,7 +497,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         // New items land visible by default; catch them and put them where the settings say.
         watcher = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.watch() }
-        Updater.shared.onChange = { [weak self] in self?.render() }
+        Updater.shared.onChange = { [weak self] in
+            self?.store.updateVersion = Updater.shared.available?.version
+            self?.store.lastUpdateCheck = Updater.shared.lastCheck
+            self?.render()
+        }
         Updater.shared.startAutomaticChecks()
     }
 
@@ -842,10 +850,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(.separator())
         let updateTitle = Updater.shared.available.map { "\u{2B06}\u{FE0E} Install Update to v\($0.version)\u{2026}" }
             ?? "Check for Updates\u{2026}"
-        let update = NSMenuItem(title: checkingForUpdates ? "Checking for Updates\u{2026}" : updateTitle,
+        let update = NSMenuItem(title: store.checkingForUpdates ? "Checking for Updates\u{2026}" : updateTitle,
                                 action: #selector(checkForUpdates), keyEquivalent: "")
         update.target = self
-        update.isEnabled = !checkingForUpdates
+        update.isEnabled = !store.checkingForUpdates
         menu.addItem(update)
         let source = NSMenuItem(title: "Update Source\u{2026}", action: #selector(editUpdateSource), keyEquivalent: "")
         source.target = self
@@ -865,17 +873,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: updates
 
-    private var checkingForUpdates = false
-
-    @objc private func checkForUpdates() {
+    @objc func checkForUpdates() {
         if let m = Updater.shared.available {
             offerInstall(m)
             return
         }
-        checkingForUpdates = true
+        guard !store.checkingForUpdates else { return }
+        store.checkingForUpdates = true
         Updater.shared.check { [weak self] result in
             guard let self else { return }
-            self.checkingForUpdates = false
+            self.store.checkingForUpdates = false
             self.render()
             switch result {
             case .success(let m?):
@@ -915,8 +922,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showUpdateError(_ error: Error) {
         let alert = NSAlert()
-        alert.messageText = "Couldn't update Curtain"
+        let code = (error as? UpdateError)?.code ?? "CUR-UPD-05"
+        alert.messageText = "Couldn't update Curtain [\(code)]"
         alert.informativeText = error.localizedDescription
+            + "\n\nLook up \(code) in ERRORS.md in Curtain's GitHub repo (right-click the arrow, Curtain on GitHub)."
         if case UpdateError.noFeed = error {
             alert.addButton(withTitle: "Set Update Source\u{2026}")
             alert.addButton(withTitle: "Cancel")
@@ -1297,6 +1306,18 @@ struct SettingsView: View {
                     }
                 }
                 HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Version \(AppVersion.version)" + (AppVersion.buildDate.map { " (built \($0))" } ?? ""))
+                        Text(updateLine).font(.caption).foregroundStyle(store.updateVersion == nil ? Color.secondary : Color.accentColor)
+                    }
+                    Spacer()
+                    Button(store.updateVersion.map { "Install v\($0)\u{2026}" }
+                           ?? (store.checkingForUpdates ? "Checking\u{2026}" : "Check for Updates")) {
+                        delegate?.checkForUpdates()
+                    }
+                    .disabled(store.checkingForUpdates)
+                }
+                HStack {
                     Button("Rescan") { delegate?.rescan() }
                     Button("Arrange now") { delegate?.forceEnforce() }.disabled(store.handsOff)
                     Button("Reset popout order") { store.order = [] }.disabled(store.order.isEmpty)
@@ -1310,6 +1331,12 @@ struct SettingsView: View {
             .padding(16)
         }
         .frame(width: 460, height: 760)
+    }
+
+    private var updateLine: String {
+        if let v = store.updateVersion { return "Version \(v) is available." }
+        guard let last = store.lastUpdateCheck else { return "Checks for updates automatically every 6 hours." }
+        return "Up to date. Last checked \(last.formatted(date: .omitted, time: .shortened))."
     }
 
     private func permissionRow(_ text: String, _ button: String, action: @escaping () -> Void) -> some View {
