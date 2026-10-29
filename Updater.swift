@@ -7,6 +7,8 @@ enum AppVersion {
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
     static let updateFeed = "https://raw.githubusercontent.com/jonpikereally/Curtain/main/updates/latest.json"
     static let repo = "https://github.com/jonpikereally/Curtain"
+    /// Stamped into Info.plist by build.sh and release.sh; nil in a build made some other way.
+    static var buildDate: String? { Bundle.main.object(forInfoDictionaryKey: "CurtainBuildDate") as? String }
 }
 
 /// Update feed format (latest.json):
@@ -23,6 +25,16 @@ enum UpdateError: LocalizedError {
     case badFeed(String)
     case unreadable(String)
     case badPackage(String)
+
+    /// Listed in ERRORS.md. CUR-UPD-05 covers anything else, such as a feed that isn't valid JSON.
+    var code: String {
+        switch self {
+        case .noFeed: return "CUR-UPD-01"
+        case .badFeed: return "CUR-UPD-02"
+        case .unreadable: return "CUR-UPD-03"
+        case .badPackage: return "CUR-UPD-04"
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -43,6 +55,8 @@ final class Updater {
 
     /// Newer version found by the most recent check, if any.
     private(set) var available: UpdateManifest?
+    /// When the most recent check succeeded.
+    private(set) var lastCheck: Date?
     var onChange: () -> Void = {}
     private var timer: Timer?
 
@@ -107,6 +121,7 @@ final class Updater {
             DispatchQueue.main.async {
                 if case .success(let newer) = result {
                     self.available = newer
+                    self.lastCheck = Date()
                     self.onChange()
                 }
                 completion(result)

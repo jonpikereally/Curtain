@@ -28,6 +28,7 @@ APP="$DIST/Curtain/Curtain.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create -output "$APP/Contents/MacOS/Curtain" "$CACHE/Curtain-arm64" "$CACHE/Curtain-x86_64"
 cp Info.plist "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :CurtainBuildDate string $(date -u '+%Y-%m-%d %H:%M UTC')" "$APP/Contents/Info.plist"
 cp Curtain.icns "$APP/Contents/Resources/"
 codesign --force --sign - "$APP"
 
