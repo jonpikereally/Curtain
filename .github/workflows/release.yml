@@ -51,7 +51,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add updates/Curtain.zip updates/latest.json
+          git add -A updates
           git commit -m "Release v${{ steps.version.outputs.version }}"
           for i in 1 2 3; do
             git pull --rebase origin main && git push origin HEAD:main && exit 0

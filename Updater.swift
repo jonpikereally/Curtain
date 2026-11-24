@@ -137,6 +137,12 @@ final class Updater {
                 guard newBundle?.bundleIdentifier == Bundle.main.bundleIdentifier else {
                     throw UpdateError.badPackage("it's a different app (bundle ID doesn't match)")
                 }
+                // A cached older zip must not pass for the new version.
+                let gotVersion = newBundle?.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+                guard gotVersion == manifest.version else {
+                    throw UpdateError.badPackage("the download is v\(gotVersion), not v\(manifest.version). "
+                        + "GitHub was probably still serving a cached copy; wait five minutes and try again")
+                }
                 guard let exe = newBundle?.executableURL,
                       FileManager.default.isExecutableFile(atPath: exe.path) else {
                     throw UpdateError.badPackage("the app has no executable")
@@ -149,7 +155,7 @@ final class Updater {
                 helper.arguments = [script.path,
                                     String(ProcessInfo.processInfo.processIdentifier),
                                     newApp.path,
-                                    Bundle.main.bundleURL.path,
+                                    Self.installDestination.path,
                                     Bundle.main.bundleIdentifier ?? "com.jonpike.curtain"]
                 try helper.run()
 
@@ -161,6 +167,16 @@ final class Updater {
     }
 
     // MARK: - Helpers
+
+    /// Where the update goes: the running app's own location, except when macOS
+    /// runs it from a read-only App Translocation copy (opened straight from a
+    /// download), which can't be replaced. Then it goes to /Applications, where
+    /// Curtain normally lives.
+    static var installDestination: URL {
+        let here = Bundle.main.bundleURL
+        guard here.path.contains("/AppTranslocation/") else { return here }
+        return URL(fileURLWithPath: "/Applications", isDirectory: true).appendingPathComponent(here.lastPathComponent)
+    }
 
     private static func read(_ url: URL) throws -> Data {
         if url.isFileURL {
@@ -214,11 +230,17 @@ final class Updater {
     PID="$1"; NEW="$2"; DEST="$3"; BID="$4"
     for _ in $(seq 1 150); do kill -0 "$PID" 2>/dev/null || break; sleep 0.2; done
     rm -rf "$DEST.old"
-    if mv "$DEST" "$DEST.old" && /usr/bin/ditto --norsrc "$NEW" "$DEST"; then
-        rm -rf "$DEST.old"
-    else
+    # Each step separately: the old combined "mv && ditto || rm -rf DEST" emptied the
+    # installed app when the first mv failed (same fix as PasteStack v1.19).
+    if [ ! -e "$DEST" ]; then
+        /usr/bin/ditto --norsrc "$NEW" "$DEST"              # nothing installed there yet (App Translocation)
+    elif ! mv "$DEST" "$DEST.old"; then
+        :                                                  # couldn't move it aside: leave the installed app alone
+    elif ! /usr/bin/ditto --norsrc "$NEW" "$DEST"; then
         rm -rf "$DEST"
         mv "$DEST.old" "$DEST"
+    else
+        rm -rf "$DEST.old"
     fi
     /usr/bin/xattr -dr com.apple.quarantine "$DEST" 2>/dev/null
     /usr/bin/codesign --force --sign - "$DEST" 2>/dev/null
