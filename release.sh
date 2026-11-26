@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build a release: universal (Apple Silicon + Intel) app with an installer, written to
+# Build a release: Apple silicon app with an installer, written to
 # updates/Curtain.zip + updates/latest.json. Committing and pushing updates/ ships it:
 # every installed copy's "Check for Updates" reads latest.json from this repo on GitHub.
 #
@@ -14,19 +14,16 @@ if [[ -z "${UPDATE_NOTES:-}" && -f RELEASE_NOTES.txt ]]; then
   UPDATE_NOTES=$(<RELEASE_NOTES.txt)
 fi
 CACHE="${TMPDIR:-/tmp}/curtain-modcache"
-mkdir -p "$CACHE" "$CACHE-x86"
-echo "Building arm64…"
+mkdir -p "$CACHE"
+echo "Building (Apple silicon)…"
 swiftc -O -target arm64-apple-macos14 -module-cache-path "$CACHE" \
   -o "$CACHE/Curtain-arm64" -parse-as-library Curtain.swift Updater.swift
-echo "Building x86_64…"
-swiftc -O -target x86_64-apple-macos14 -module-cache-path "$CACHE-x86" \
-  -o "$CACHE/Curtain-x86_64" -parse-as-library Curtain.swift Updater.swift
 
 DIST="$CACHE/dist"
 rm -rf "$DIST"
 APP="$DIST/Curtain/Curtain.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-lipo -create -output "$APP/Contents/MacOS/Curtain" "$CACHE/Curtain-arm64" "$CACHE/Curtain-x86_64"
+cp "$CACHE/Curtain-arm64" "$APP/Contents/MacOS/Curtain"
 cp Info.plist "$APP/Contents/Info.plist"
 cp Curtain.icns "$APP/Contents/Resources/"
 codesign --force --sign - "$APP"
